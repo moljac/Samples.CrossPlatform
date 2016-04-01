@@ -1,0 +1,37 @@
+#path to the solution file e.g. "D:\Code\Test.sln"
+$slnFile = "HolisticWare.MarkDownEditor.sln"
+
+
+#results
+$results = @()
+
+#iterate through .csproj references in solution file
+foreach($projLines in get-item $slnFile | Get-Content | Select-String '".*csproj')
+{
+    $projFile = [System.IO.Path]::Combine([System.IO.Path]::GetDirectoryName($slnFile), [regex]::Match($projLines,'[^"]*csproj').Value)
+    $projFolder = [System.IO.Path]::GetDirectoryName($projFile)
+
+    #from csproj file: get lines for files to compile <Compile Include="..."/>
+    $includeLines = get-item $projFile | Get-Content | Select-String '<Compile Include'
+
+
+    #count of all files lines in project
+    $linesInProject = 0;
+    foreach($fileLine in $includeLines)
+    {
+        $includedFilePath = [System.IO.Path]::Combine($projFolder, [Regex]::Match($fileLine, '"(?<file>.*)"').Groups["file"].Value)
+        $lineCountInFile = (Get-Content $includedFilePath).Count      
+        $results+=New-Object PSObject -Property @{ Solution=$slnFile ;Project=$projFile; File=$includedFilePath; Lines=$lineCountInFile }
+    }
+}
+
+#filter out any files we dont need
+$results = $results | ?{!($_.File -match "Designer")}
+
+
+#print out:
+
+"---------------lines per solution--------------"
+$results | group Solution | %{$_.Name + ": " + ($_.Group | Measure-Object Lines -Sum).Sum}
+"---------------lines per peoject--------------"
+$results | group Project | %{$_.Name + ": " + ($_.Group | Measure-Object Lines -Sum).Sum}
